@@ -22,6 +22,9 @@ dev = [
 gui = [
     "pyside6>=6.7",         # UI (se instala con: uv sync --group gui)
 ]
+build = [
+    "pyinstaller>=6.0",     # empaquetado a .exe (uv sync --group build)
+]
 
 [build-system]
 requires = ["hatchling"]

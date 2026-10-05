@@ -1,6 +1,8 @@
 """Ventana principal: navegación por pasos + orquestación de workers."""
 from __future__ import annotations
 
+import logging
+import os
 import sys
 from pathlib import Path
 
@@ -269,7 +271,23 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage("Proyecto nuevo listo")
 
 
+def _setup_logging() -> None:
+    """Logs a archivo: un .exe con ventana no tiene consola donde ver warnings."""
+    log_dir = Path(os.environ.get("APPDATA", str(Path.home()))) / "iRacingCinematicStudio"
+    try:
+        log_dir.mkdir(parents=True, exist_ok=True)
+        logging.basicConfig(
+            filename=str(log_dir / "app.log"),
+            level=logging.INFO,
+            format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+            encoding="utf-8",
+        )
+    except OSError:
+        pass  # sin logging no es fatal
+
+
 def main() -> int:
+    _setup_logging()
     app = QApplication(sys.argv)
     app.setApplicationName("iRacing AI Cinematic Studio")
     app.setStyle("Fusion")
