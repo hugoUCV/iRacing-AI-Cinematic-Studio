@@ -21,7 +21,7 @@ MP4 1080×1920 + título/caption/hashtags
 
 ## Estado
 
-**MVP 1 (backend)** — pipeline completo implementado y testeado (62 tests):
+**MVP 1** — pipeline completo + GUI funcional (69 tests):
 
 - `SDKController` (pyirsdk): seek por tiempo de sesión, cámaras, play/pausa,
   captura integrada de iRacing, verificación de comandos.
@@ -32,10 +32,23 @@ MP4 1080×1920 + título/caption/hashtags
 - Captura guiada por plano (backend nativo iRacing u offline/dry-run).
 - Export 1080×1920@60 con FFmpeg (NVENC, fallback libx264) — **verificado con
   render real** en tests de integración.
-- CLI (`python -m app.cli`).
+- **GUI PySide6** (tema oscuro): conectar → director (línea de eventos
+  clicable) → editor (trim/activar) → captura y render, con workers en QThread
+  y barras de progreso reales.
+- CLI (`python -m app.cli`) para automatizar el mismo flujo.
 
-Pendiente de MVP 1: interfaz gráfica (PySide6, siguiente iteración) y la
-verificación en vivo con una replay real (ver Spikes).
+Pendiente: verificación en vivo con una replay real (ver Spikes) y el pulido
+de la GUI (miniaturas, reordenado de planos, preview del vídeo).
+
+## Uso (GUI)
+
+```bash
+uv sync --group gui   # instala PySide6 (una vez)
+uv run python -m app.main
+```
+
+Flujo: abre la replay en iRacing → «Nueva carrera» → Conectar → Escanear →
+Director (piloto, estilo, duración) → Editar (trims) → Capturar y render.
 
 ## Uso (CLI)
 
