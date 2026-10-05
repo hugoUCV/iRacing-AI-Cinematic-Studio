@@ -1,0 +1,19 @@
+# Proyectos del usuario (replays, capturas, renders)
+Projects/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+dist/
+build/
+*.egg-info/
+
+# Config con secretos
+config.local.json
+.env
+
+# Test / cachés
+.pytest_cache/
+.ruff_cache/
+.cache/

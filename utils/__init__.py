@@ -1,0 +1,1 @@
+"""Utilidades: configuración, caché, secretos."""

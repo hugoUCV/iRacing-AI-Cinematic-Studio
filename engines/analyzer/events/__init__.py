@@ -1,0 +1,1 @@
+"""Detectores de eventos."""
