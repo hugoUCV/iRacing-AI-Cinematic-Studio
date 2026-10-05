@@ -85,8 +85,8 @@ class FakeIR:
         self.replay_time = ms / 1000.0
         self.vars["ReplaySessionTime"] = self.replay_time
 
-    def replay_set_play_speed(self, speed, slow_motion):
-        self.calls.append(f"speed:{speed}:{slow_motion}")
+    def replay_set_play_speed(self, speed=0, slow_motion=False):
+        self.calls.append(f"speed:{speed}:{1 if slow_motion else 0}")
         self.speed = speed
         self.vars["ReplayPlaySpeed"] = speed
         self.vars["IsReplayPlaying"] = 1 if speed > 0 else 0
