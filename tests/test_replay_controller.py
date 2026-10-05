@@ -1,102 +1,14 @@
 """Tests del SDKController con un fake del SDK (sin simulador).
 
-El fake replica la superficie de pyirsdk que usa el controller: startup,
-freeze_var_buffer_latest, __getitem__ (vars y YAML de sesión), var_headers_names
-y los métodos broadcast.
+El fake replica la superficie de pyirsdk que usa el controller (vive en
+tests.fakes, compartido con el scanner).
 """
 from __future__ import annotations
 
 from core.models import CameraSpec
 
 from engines.replay.sdk_controller import SDKController, VC_START
-
-
-class FakeIR:
-    """Cliente pyirsdk simulado."""
-
-    def __init__(self, replay_time: float = 0.0):
-        self.is_initialized = True
-        self.is_connected = True
-        self.calls: list[str] = []
-        self.replay_time = replay_time
-        self.speed = 0
-        self.session_yaml = {
-            "WeekendInfo": {
-                "TrackName": "spa",
-                "TrackDisplayName": "Circuit de Spa-Francorchamps",
-            },
-            "SessionInfo": {
-                "Sessions": [
-                    {"SessionNum": 0, "SessionType": "Practice", "SessionTime": "1800", "SessionLaps": "unlimited"},
-                    {"SessionNum": 1, "SessionType": "Race", "SessionTime": "2340", "SessionLaps": "18 laps"},
-                ]
-            },
-            "DriverInfo": {
-                "Drivers": [
-                    {"CarIdx": 0, "CarNumber": "7", "CarNumberRaw": 7, "UserName": "Hugo Ferrer",
-                     "TeamName": "", "IRating": 2500, "CarClassShortName": "GT3",
-                     "CarScreenName": "Porsche 911 GT3 R", "CarIsPaceCar": 0},
-                    {"CarIdx": 1, "CarNumber": "21", "CarNumberRaw": 21, "UserName": "Rival",
-                     "TeamName": "", "IRating": 2400, "CarClassShortName": "GT3",
-                     "CarScreenName": "Porsche 911 GT3 R", "CarIsPaceCar": 0},
-                    {"CarIdx": 2, "CarNumber": "1", "CarNumberRaw": 1, "UserName": "Pace Car",
-                     "TeamName": "", "IRating": None, "CarClassShortName": "",
-                     "CarScreenName": "", "CarIsPaceCar": 1},
-                ]
-            },
-            "CameraInfo": {
-                "Groups": [
-                    {"GroupNum": 1, "GroupName": "cockpit"},
-                    {"GroupNum": 2, "GroupName": "chase"},
-                    {"GroupNum": 3, "GroupName": "TV1"},
-                    {"GroupNum": 4, "GroupName": "TV2"},
-                    {"GroupNum": 10, "GroupName": "chopper"},
-                ]
-            },
-        }
-        self.vars = {
-            "ReplaySessionTime": self.replay_time,
-            "ReplaySessionNum": 1,
-            "ReplayFrameNum": int(self.replay_time * 60),
-            "IsReplayPlaying": 1,
-            "ReplayPlaySpeed": self.speed,
-            "ReplayPlaySlowMotion": 0,
-            "CamCarIdx": 0,
-            "CamGroupNumber": 3,
-            "CamCameraNumber": 0,
-            "CarIdxPosition": [1, 2, 0],
-            "CarIdxLapDistPct": [0.5, 0.49, 0.0],
-            "CarIdxTrackSurface": [3, 3, -1],
-        }
-        self.var_headers_names = list(self.vars.keys())
-
-    # ── superficie pyirsdk ──
-    def startup(self): ...
-
-    def freeze_var_buffer_latest(self): ...
-
-    def __getitem__(self, key):
-        if key in self.vars:
-            return self.vars[key]
-        return self.session_yaml.get(key)
-
-    def replay_search_session_time(self, session_num, ms):
-        self.calls.append(f"seek:{session_num}:{ms}")
-        self.replay_time = ms / 1000.0
-        self.vars["ReplaySessionTime"] = self.replay_time
-
-    def replay_set_play_speed(self, speed=0, slow_motion=False):
-        self.calls.append(f"speed:{speed}:{1 if slow_motion else 0}")
-        self.speed = speed
-        self.vars["ReplayPlaySpeed"] = speed
-        self.vars["IsReplayPlaying"] = 1 if speed > 0 else 0
-
-    def cam_switch_num(self, car_number, group, camera):
-        self.calls.append(f"cam:{car_number}:{group}:{camera}")
-        self.vars["CamGroupNumber"] = group
-
-    def video_capture(self, mode):
-        self.calls.append(f"vcapture:{mode}")
+from tests.fakes import FakeIR
 
 
 def make_controller() -> tuple[SDKController, FakeIR]:
@@ -114,6 +26,7 @@ def test_connect_and_session_info():
     assert info.track_name == "spa"
     assert info.track_display == "Circuit de Spa-Francorchamps"
     assert info.laps_total == 18
+    assert info.track_length_m == 7004.0  # "7.004 km"
     # el pace car se excluye
     assert [d.car_idx for d in info.drivers] == [0, 1]
     assert info.drivers[0].name == "Hugo Ferrer"
@@ -124,7 +37,7 @@ def test_camera_groups():
     ctrl, _ = make_controller()
     ctrl.session_info()  # rellena drivers
     groups = ctrl.camera_groups()
-    assert ("TV1" in {g[1] for g in groups}) and (3, "TV1") in groups
+    assert (3, "TV1") in groups
 
 
 def test_seek_play_pause_video_capture():

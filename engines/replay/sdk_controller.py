@@ -142,8 +142,20 @@ class SDKController(ReplayController):
             track_display=wi.get("TrackDisplayName"),
             duration_s=_num(session.get("SessionTime")),
             laps_total=self._parse_laps(session.get("SessionLaps")),
+            track_length_m=self._parse_length(wi.get("TrackLength")),
             drivers=self._drivers,
         )
+
+    @staticmethod
+    def _parse_length(value: Any) -> float | None:
+        """'4.352 km' | '2.5 miles' → metros."""
+        if not value:
+            return None
+        m = re.match(r"\s*([\d.]+)\s*(km|mi|mile|miles)", str(value), re.I)
+        if not m:
+            return None
+        n = float(m.group(1))
+        return n * 1609.34 if m.group(2).lower().startswith("mi") else n * 1000.0
 
     @staticmethod
     def _parse_laps(value: Any) -> int | None:

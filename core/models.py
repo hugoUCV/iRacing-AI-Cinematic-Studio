@@ -34,6 +34,7 @@ class SessionInfo(BaseModel):
     track_display: str | None = None
     duration_s: float | None = None
     laps_total: int | None = None
+    track_length_m: float | None = None
     drivers: list[DriverInfo] = Field(default_factory=list)
     start_utc: datetime | None = None
 
