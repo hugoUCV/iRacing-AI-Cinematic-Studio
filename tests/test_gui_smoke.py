@@ -140,6 +140,23 @@ def test_event_timeline_renders(qtbot):
     assert widget.grab().width() == 600  # pintado sin crash
 
 
+def test_director_generate_button_state(qtbot):
+    """Regresión: set_generating debe recibir un bool, no una lista de eventos."""
+    from app.screens.director import DirectorScreen
+
+    screen = DirectorScreen(ai_available=False)
+    qtbot.addWidget(screen)
+    assert screen.generate_btn.isEnabled() is False  # sin eventos aún
+    screen.set_model(make_model())
+    assert screen.generate_btn.isEnabled() is True
+    screen.set_generating(True)
+    assert screen.generate_btn.isEnabled() is False
+    assert screen.generate_btn.text() == "Generando…"
+    screen.set_generating(False)
+    assert screen.generate_btn.isEnabled() is True
+    assert screen.generate_btn.text() == "Generar plan de planos"
+
+
 def test_scan_worker_with_fake(qtbot):
     from app.workers import ScanWorker
     from utils.config import ScanConfig

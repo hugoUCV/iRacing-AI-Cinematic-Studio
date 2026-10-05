@@ -134,7 +134,8 @@ class DirectorScreen(QWidget):
         )
 
     def set_generating(self, active: bool) -> None:
-        self.generate_btn.setEnabled(not active and self.timeline.events or False)
+        has_events = bool(self.timeline.events)
+        self.generate_btn.setEnabled(not active and has_events)
         self.generate_btn.setText("Generando…" if active else "Generar plan de planos")
 
     def _emit_plan(self) -> None:
