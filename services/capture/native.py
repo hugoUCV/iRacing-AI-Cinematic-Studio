@@ -13,7 +13,6 @@ import time
 from pathlib import Path
 
 from engines.replay.sdk_controller import VC_START, VC_STOP
-
 from services.capture.base import CaptureBackend
 from utils.config import default_videos_dir
 
