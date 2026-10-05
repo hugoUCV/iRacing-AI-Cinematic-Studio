@@ -45,10 +45,22 @@ class AIProvider(ABC):
         return f"<AIProvider {self.name}>"
 
 
-def provider_from_config(config: dict[str, Any]) -> AIProvider:
+def provider_from_config(config) -> AIProvider | None:
     """Factory: crea el proveedor activo según la configuración.
 
-    Implementación real en MVP 1 (OpenAI-compatible vía httpx). Aquí solo el
-    contrato, para que el resto del código no dependa de un proveedor concreto.
-    """
-    raise NotImplementedError("provider_from_config se implementa en MVP 1")
+    Devuelve None si el proveedor está desactivado (el llamador usa el
+    director de reglas como fallback)."""
+    if config is None or config.provider in (None, "none"):
+        return None
+    if config.provider == "openai_compat":
+        from ai.providers.openai_compat import OpenAICompatProvider
+        from utils.secrets import get_api_key
+
+        key = get_api_key(config.provider, config.key_env) or ""
+        return OpenAICompatProvider(
+            base_url=config.base_url,
+            model=config.model,
+            api_key=key,
+            temperature=config.temperature,
+        )
+    raise ValueError(f"proveedor desconocido: {config.provider}")
