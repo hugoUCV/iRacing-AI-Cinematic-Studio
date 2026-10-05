@@ -21,9 +21,56 @@ MP4 1080×1920 + título/caption/hashtags
 
 ## Estado
 
-**MVP 0** — análisis técnico, arquitectura e interfaces definidas.
-La implementación (MVP 1: scan → eventos → shot plan → captura → export
-vertical) arranca a continuación.
+**MVP 1 (backend)** — pipeline completo implementado y testeado (62 tests):
+
+- `SDKController` (pyirsdk): seek por tiempo de sesión, cámaras, play/pausa,
+  captura integrada de iRacing, verificación de comandos.
+- Scanner del replay → `SessionModel` cacheado (eventos, vueltas).
+- Detectores: salidas de pista, trompos, adelantamientos, batallas, vueltas
+  rápidas, salida/llegada.
+- Director de reglas (determinista) + AI Director (LLM con fallback a reglas).
+- Captura guiada por plano (backend nativo iRacing u offline/dry-run).
+- Export 1080×1920@60 con FFmpeg (NVENC, fallback libx264) — **verificado con
+  render real** en tests de integración.
+- CLI (`python -m app.cli`).
+
+Pendiente de MVP 1: interfaz gráfica (PySide6, siguiente iteración) y la
+verificación en vivo con una replay real (ver Spikes).
+
+## Uso (CLI)
+
+```bash
+uv sync                                  # entorno
+# 1) con una replay ABIERTA en iRacing:
+uv run python -m app.cli status          # sesión + cámaras disponibles
+uv run python -m app.cli scan            # escanea y muestra eventos (cacheado)
+# 2) generar el vídeo completo:
+uv run python -m app.cli generate \
+    --driver "Hugo Ferrer" --style hype --duration 20 \
+    --project "Projects/Spa GT3"
+# 3) IA opcional (OpenAI/Gemini/Pollinations/Ollama — todos OpenAI-compatibles):
+uv run python -m app.cli config --set-provider openai_compat \
+    --set-base-url https://gen.pollinations.ai/v1 --set-model openai \
+    --set-api-key TU_CLAVE        # se guarda en Windows Credential Manager
+uv run python -m app.cli generate --ai ...
+```
+
+Modo dry-run (sin grabar, valida la orquestación):
+
+```bash
+uv run python -m app.cli capture --plan Projects/.../plan.json --offline
+```
+
+## Verificación en vivo (spikes)
+
+Con una replay abierta en iRacing:
+
+```bash
+uv run python tools/spike_s1_s3.py
+```
+
+Valida S1 (¿`CarIdx*` trae todos los coches durante la replay?) y S3
+(precisión del seek). El resultado se registra en el skill del proyecto.
 
 ## Documentos
 
@@ -48,13 +95,16 @@ vertical) arranca a continuación.
 - Windows + iRacing instalado (misma máquina)
 - Python 3.11+ y [uv](https://docs.astral.sh/uv/)
 - FFmpeg en PATH (para exportar)
-- Opcional: OBS 28+ (captura con audio), una API key OpenAI/Gemini/Pollinations
-  u Ollama local (IA)
+- Para capturar: activar **Enable video capture** en las opciones gráficas de
+  iRacing (o usar `--offline` para probar)
+- Opcional: OBS 28+ (captura con audio, MVP 3), una API key
+  OpenAI/Gemini/Pollinations u Ollama local (IA)
 
 ## Desarrollo
 
 ```bash
-uv sync            # entorno + dependencias
-uv run pytest      # tests
-uv run ruff check  # lint
+uv sync                          # entorno + dependencias
+uv run pytest                    # tests
+uv run ruff check                # lint
+uv sync --group gui              # + PySide6 (UI)
 ```
