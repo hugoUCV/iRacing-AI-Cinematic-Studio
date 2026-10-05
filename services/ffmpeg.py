@@ -25,13 +25,33 @@ class FFmpeg:
     def available(self) -> bool:
         return shutil.which(self.ffmpeg) is not None
 
-    def run(self, args: list[str], check: bool = True) -> subprocess.CompletedProcess:
+    def run(
+        self,
+        args: list[str],
+        check: bool = True,
+        on_progress=None,
+        total_s: float | None = None,
+    ) -> subprocess.CompletedProcess:
         """Ejecuta ffmpeg con los argumentos dados (sin -y: añadirlo si hace
-        falta sobrescribir)."""
+        falta sobrescribir).
+
+        on_progress(fraction: float | None, message: str) se llama con el
+        avance si se añade `-progress pipe:1` (total_s → fracción 0..1)."""
         cmd = [self.ffmpeg, "-hide_banner"] + args
+        if on_progress is not None:
+            cmd += ["-progress", "pipe:1", "-nostats"]
         proc = subprocess.run(
             cmd, capture_output=True, text=True, encoding="utf-8", errors="replace"
         )
+        if on_progress is not None:
+            out_ms = None
+            for line in proc.stdout.splitlines():
+                if line.startswith("out_time_ms="):
+                    out_ms = int(line.split("=", 1)[1])
+            fraction = None
+            if out_ms is not None and total_s:
+                fraction = min(out_ms / 1000.0 / total_s, 1.0)
+            on_progress(fraction, "renderizando…")
         if check and proc.returncode != 0:
             raise FFmpegError(
                 f"ffmpeg falló (rc={proc.returncode}):\n{' '.join(cmd)}\n{proc.stderr[-2000:]}"

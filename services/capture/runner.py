@@ -37,13 +37,17 @@ class CaptureRunner:
         self.verify_retries = verify_retries
         self.wait_timeout_s = wait_timeout_s  # None → dur*2+15 por plano
 
-    def run(self, plan: ShotPlan) -> dict[str, Path]:
+    def run(self, plan: ShotPlan, on_progress=None) -> dict[str, Path]:
         """Captura todos los planos. Devuelve {shot_id: archivo} para los que
-        se capturaron correctamente (los fallos se registran y se saltan)."""
+        se capturaron correctamente (los fallos se registran y se saltan).
+
+        on_progress(current: int, total: int, message: str) opcional."""
         self.captures_dir.mkdir(parents=True, exist_ok=True)
         result: dict[str, Path] = {}
         shots = sorted(plan.shots, key=lambda s: s.source_start_s)
-        for shot in shots:
+        for i, shot in enumerate(shots):
+            if on_progress:
+                on_progress(i + 1, len(shots), f"plano {shot.id} ({shot.camera.group_name})")
             try:
                 produced = self._capture_shot(shot)
                 if produced:

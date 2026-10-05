@@ -86,11 +86,12 @@ def export_timeline(
     job: RenderJob | None = None,
     ffmpeg: FFmpeg | None = None,
     margin_s: float = CAPTURE_MARGIN_S,
+    on_progress=None,
 ) -> Path:
     """Renderiza el timeline a `output`. Devuelve la ruta del archivo.
 
     Si NVENC no está disponible en la máquina, reintenta con libx264.
-    """
+    on_progress(fraction | None, message) usa `-progress` de ffmpeg."""
     job = job or RenderJob(project=Path("."), output=output)
     ff = ffmpeg or FFmpeg()
     if not ff.available():
@@ -98,15 +99,21 @@ def export_timeline(
 
     clips = [c for c in timeline.clips if c.enabled]
     output.parent.mkdir(parents=True, exist_ok=True)
+    total = sum(
+        max(0.0, (c.shot.source_end_s - c.shot.source_start_s) - c.trim_in_s - c.trim_out_s)
+        for c in clips
+    )
 
     args = build_export_command(clips, captures, output, job, margin_s)
     try:
-        ff.run(args)
+        ff.run(args, on_progress=on_progress, total_s=total or None)
     except FFmpegError as first:
         if job.codec != "h264_nvenc":
             raise
         # fallback: codificador software
         fallback = job.model_copy(update={"codec": "libx264"})
         args2 = build_export_command(clips, captures, output, fallback, margin_s)
-        ff.run(args2)
+        ff.run(args2, on_progress=on_progress, total_s=total or None)
+    if on_progress:
+        on_progress(1.0, "render completado")
     return output

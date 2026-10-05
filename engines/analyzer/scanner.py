@@ -50,9 +50,13 @@ class Scanner:
         session: SessionInfo,
         replay_path: Path | None = None,
         detectors: list | None = None,
+        on_progress=None,
     ) -> tuple[SessionModel, list[Frame]]:
         """Escanea la sesión. Si hay caché válida, devuelve el modelo cacheado
-        (frames vacíos) sin tocar el simulador."""
+        (frames vacíos) sin tocar el simulador.
+
+        on_progress(fraction: float, message: str) se llama durante el scan
+        (0.0–1.0); None si no interesa (CLI/tests)."""
         key = None
         if self.cache and replay_path is not None:
             key = content_hash(
@@ -60,9 +64,11 @@ class Scanner:
             )
             cached = self.cache.load(key)
             if cached:
+                if on_progress:
+                    on_progress(1.0, "análisis recuperado de caché")
                 return SessionModel.model_validate(cached), []
 
-        frames = self._collect_frames(session)
+        frames = self._collect_frames(session, on_progress)
         model = self._build_model(session, frames, detectors or get_detectors())
         if self.cache and key:
             self.cache.save(key, model.model_dump(mode="json"))
@@ -70,10 +76,11 @@ class Scanner:
 
     # ── recolección ───────────────────────────────────────────────────────
 
-    def _collect_frames(self, session: SessionInfo) -> list[Frame]:
+    def _collect_frames(self, session: SessionInfo, on_progress=None) -> list[Frame]:
         ctrl = self.controller
         frames: list[Frame] = []
         seen_times: set[int] = set()
+        last_report_s = -1.0
 
         ctrl.seek_session_time(session.session_num, 0)
         ctrl.play(speed=self.config.speed)
@@ -102,6 +109,9 @@ class Scanner:
                         frames.append(frame)
                     last_t = t
                     last_advance = time.monotonic()
+                if on_progress and t - last_report_s >= 1.0 and limit_s > 0:
+                    on_progress(min(t / limit_s, 1.0), f"escaneando… t={t:.0f}s")
+                    last_report_s = t
                 if t >= limit_s:
                     break
                 if time.monotonic() - last_advance > self.stall_timeout_s:
