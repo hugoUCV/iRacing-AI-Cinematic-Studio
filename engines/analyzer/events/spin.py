@@ -12,8 +12,8 @@ from core.models import Event, EventType, SessionModel
 from engines.analyzer.events.base import EventDetector
 from engines.analyzer.events.util import (
     BASE_IMPORTANCE,
-    LOC_OFF_TRACK,
     clamp01,
+    is_real_off_track,
 )
 from engines.analyzer.frames import Frame, speed_at
 
@@ -30,13 +30,13 @@ class SpinDetector(EventDetector):
 
         for car in car_indices:
             speeds = speed_at(car, frames, track_len)
-            # ventanas off-track del coche
+            # ventanas off-track REALES del coche (hierba/grava, no pianos)
             off_windows: list[tuple[float, float]] = []
             in_off = False
             start = 0.0
             for f in frames:
                 s = f.get(car)
-                if s is not None and s.track_loc == LOC_OFF_TRACK:
+                if s is not None and is_real_off_track(s):
                     if not in_off:
                         start = f.t_s
                         in_off = True

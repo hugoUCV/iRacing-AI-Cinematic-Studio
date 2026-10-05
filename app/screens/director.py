@@ -14,9 +14,13 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.widgets.event_timeline import LABELS, EventTimelineWidget
 from core.models import SessionModel, StylePreset
 
-from app.widgets.event_timeline import EventTimelineWidget, LABELS
+
+def _fmt(t: float) -> str:
+    return f"{int(t // 60)}:{int(t % 60):02d}"
+
 
 STYLES = {
     StylePreset.CINEMATIC: "Cinematic · planos largos y suaves",
@@ -89,6 +93,11 @@ class DirectorScreen(QWidget):
         self.timeline = EventTimelineWidget()
         c.addWidget(self.timeline)
 
+        self.moments_label = QLabel("")
+        self.moments_label.setObjectName("Muted")
+        self.moments_label.setWordWrap(True)
+        c.addWidget(self.moments_label)
+
         self.notes_label = QLabel("")
         self.notes_label.setObjectName("Muted")
         self.notes_label.setWordWrap(True)
@@ -120,11 +129,22 @@ class DirectorScreen(QWidget):
         self.timeline.set_data(model.events, model.session.duration_s or 1.0)
         counts: dict[str, int] = {}
         for e in model.events:
-            counts[LABELS.get(e.type, e.type.value)] = counts.get(
-                LABELS.get(e.type, e.type.value), 0
-            ) + 1
+            key = LABELS.get(e.type, e.type.value)
+            counts[key] = counts.get(key, 0) + 1
         summary = " · ".join(f"{k}: {v}" for k, v in counts.items())
         self.events_label.setText(f"Eventos detectados — {len(model.events)} ({summary})")
+
+        # momentos destacados (top 5 por importancia) legibles
+        names = {d.car_idx: d.name for d in model.session.drivers}
+        top = sorted(model.events, key=lambda e: -e.importance)[:5]
+        lines = []
+        for e in top:
+            label = LABELS.get(e.type, e.type.value)
+            who = ", ".join(names.get(d, f"#{d}") for d in e.drivers) or "—"
+            lines.append(f"• {label} · {who} · {_fmt(e.start_s)}")
+        self.moments_label.setText(
+            "Momentos destacados:\n" + "\n".join(lines)
+        )
         self.generate_btn.setEnabled(True)
 
     def set_plan(self, plan) -> None:

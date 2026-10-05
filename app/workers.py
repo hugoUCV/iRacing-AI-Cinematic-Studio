@@ -1,13 +1,14 @@
 """Workers de la GUI: scan, plan, captura y export en QThread."""
 from __future__ import annotations
 
+import threading
 from pathlib import Path
 
 from PySide6.QtCore import QThread, Signal
 
 from core.models import RenderJob, SessionInfo, StylePreset
 
-from engines.analyzer.scanner import Scanner
+from engines.analyzer.scanner import ScanCancelled, Scanner
 from engines.video.export import export_timeline
 from services.capture.native import NativeCapture
 from services.capture.offline import OfflineCapture
@@ -18,6 +19,7 @@ from utils.config import ScanConfig
 class ScanWorker(QThread):
     progress = Signal(float, str)
     done = Signal(object, object)  # (SessionModel, frames)
+    cancelled = Signal()
     failed = Signal(str)
 
     def __init__(
@@ -35,6 +37,11 @@ class ScanWorker(QThread):
         self.session = session
         self.replay_path = replay_path
         self.cache_dir = cache_dir
+        self._cancel = threading.Event()
+
+    def cancel(self) -> None:
+        """Pide detener el escaneo (se procesa en el siguiente sondeo)."""
+        self._cancel.set()
 
     def run(self) -> None:
         try:
@@ -43,8 +50,11 @@ class ScanWorker(QThread):
                 cache_dir=self.cache_dir, stall_timeout_s=8.0,
             )
             model, frames = scanner.scan(
-                self.session, replay_path=self.replay_path, on_progress=self._p
+                self.session, replay_path=self.replay_path,
+                on_progress=self._p, cancel=self._cancel,
             )
+        except ScanCancelled:
+            self.cancelled.emit()
         except Exception as exc:
             self.failed.emit(str(exc))
         else:

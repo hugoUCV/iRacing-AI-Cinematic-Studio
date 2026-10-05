@@ -5,6 +5,7 @@ from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
+    QComboBox,
     QFileDialog,
     QFrame,
     QHBoxLayout,
@@ -18,7 +19,8 @@ from PySide6.QtWidgets import (
 
 class ConnectScreen(QWidget):
     connect_requested = Signal()
-    scan_requested = Signal(Path)  # ruta del .rpy (o None)
+    scan_requested = Signal(Path, int)  # ruta del .rpy (o None), velocidad
+    scan_cancelled = Signal()
     back_requested = Signal()
 
     def __init__(self, parent=None):
@@ -73,10 +75,28 @@ class ConnectScreen(QWidget):
         lay.addWidget(card)
 
         # escaneo
+        scan_row = QHBoxLayout()
         self.scan_btn = QPushButton("Escanear la sesión")
         self.scan_btn.setEnabled(False)
         self.scan_btn.clicked.connect(self._scan)
-        lay.addWidget(self.scan_btn)
+        scan_row.addWidget(self.scan_btn)
+        scan_row.addSpacing(10)
+        scan_row.addWidget(QLabel("Velocidad:"))
+        self.speed_combo = QComboBox()
+        for v in (1, 2, 4, 8, 16):
+            self.speed_combo.addItem(f"{v}x", userData=v)
+        self.speed_combo.setCurrentIndex(2)  # 4x por defecto
+        self.speed_combo.setToolTip(
+            "Mayor velocidad = escaneo más rápido, pero eventos cortos menos precisos"
+        )
+        scan_row.addWidget(self.speed_combo)
+        self.stop_btn = QPushButton("Detener escaneo")
+        self.stop_btn.setObjectName("Ghost")
+        self.stop_btn.hide()
+        self.stop_btn.clicked.connect(self.scan_cancelled.emit)
+        scan_row.addWidget(self.stop_btn)
+        scan_row.addStretch()
+        lay.addLayout(scan_row)
 
         self.progress = QProgressBar()
         self.progress.setRange(0, 100)
@@ -117,8 +137,13 @@ class ConnectScreen(QWidget):
         self.scan_btn.setEnabled(not active and self._connected)
         self.connect_btn.setEnabled(not active)
         self.browse_btn.setEnabled(not active)
+        self.speed_combo.setEnabled(not active)
+        self.stop_btn.setVisible(active)
         if not active:
             self.scan_label.setText("")
+
+    def set_scan_cancelled(self) -> None:
+        self.scan_label.setText("Escaneo detenido")
 
     def _browse(self) -> None:
         path, _ = QFileDialog.getOpenFileName(
@@ -132,4 +157,4 @@ class ConnectScreen(QWidget):
     def _scan(self) -> None:
         self.progress.setValue(0)
         self.progress.show()
-        self.scan_requested.emit(self._replay_path)
+        self.scan_requested.emit(self._replay_path, self.speed_combo.currentData())

@@ -20,6 +20,14 @@ from utils.config import ScanConfig
 STALL_TIMEOUT_S = 6.0  # sin avance de replay durante este tiempo → fin del scan
 
 
+class ScanCancelled(Exception):
+    """El usuario canceló el escaneo."""
+
+
+def _fmt(t: float) -> str:
+    return f"{int(t // 60):d}:{int(t % 60):02d}"
+
+
 def replay_fingerprint(replay_path: Path) -> str:
     """Identidad estable de la replay: ruta + tamaño + mtime. El contenido del
     .rpy no se parsea (ver docs/01-analisis-tecnico.md)."""
@@ -51,12 +59,16 @@ class Scanner:
         replay_path: Path | None = None,
         detectors: list | None = None,
         on_progress=None,
+        cancel=None,
     ) -> tuple[SessionModel, list[Frame]]:
         """Escanea la sesión. Si hay caché válida, devuelve el modelo cacheado
         (frames vacíos) sin tocar el simulador.
 
         on_progress(fraction: float, message: str) se llama durante el scan
-        (0.0–1.0); None si no interesa (CLI/tests)."""
+        (0.0–1.0); None si no interesa (CLI/tests).
+
+        `cancel` (threading.Event) permite abortar: se lanza ScanCancelled.
+        """
         key = None
         if self.cache and replay_path is not None:
             key = content_hash(
@@ -68,15 +80,17 @@ class Scanner:
                     on_progress(1.0, "análisis recuperado de caché")
                 return SessionModel.model_validate(cached), []
 
-        frames = self._collect_frames(session, on_progress)
-        model = self._build_model(session, frames, detectors or get_detectors())
+        frames = self._collect_frames(session, on_progress, cancel)
+        model = self._build_model(session, frames, detectors or get_detectors(), on_progress)
         if self.cache and key:
             self.cache.save(key, model.model_dump(mode="json"))
         return model, frames
 
     # ── recolección ───────────────────────────────────────────────────────
 
-    def _collect_frames(self, session: SessionInfo, on_progress=None) -> list[Frame]:
+    def _collect_frames(
+        self, session: SessionInfo, on_progress=None, cancel=None
+    ) -> list[Frame]:
         ctrl = self.controller
         frames: list[Frame] = []
         seen_times: set[int] = set()
@@ -95,6 +109,8 @@ class Scanner:
 
         try:
             while True:
+                if cancel is not None and cancel.is_set():
+                    raise ScanCancelled()
                 snap = ctrl.read()
                 t = snap.get("ReplaySessionTime")
                 if t is None:
@@ -110,7 +126,11 @@ class Scanner:
                     last_t = t
                     last_advance = time.monotonic()
                 if on_progress and t - last_report_s >= 1.0 and limit_s > 0:
-                    on_progress(min(t / limit_s, 1.0), f"escaneando… t={t:.0f}s")
+                    on_progress(
+                        min(t / limit_s, 1.0),
+                        f"Escaneando… {_fmt(t)} / {_fmt(limit_s)} "
+                        f"({min(int(t / limit_s * 100), 100)}%)",
+                    )
                     last_report_s = t
                 if t >= limit_s:
                     break
@@ -159,7 +179,8 @@ class Scanner:
     # ── construcción del modelo ───────────────────────────────────────────
 
     def _build_model(
-        self, session: SessionInfo, frames: list[Frame], detectors: list
+        self, session: SessionInfo, frames: list[Frame], detectors: list,
+        on_progress=None,
     ) -> SessionModel:
         model = SessionModel(
             session=session,
@@ -168,7 +189,13 @@ class Scanner:
         )
         model.laps = self._collect_laps(frames)
         events: list[Event] = []
-        for det in detectors:
+        total = len(detectors)
+        for i, det in enumerate(detectors):
+            if on_progress:
+                on_progress(
+                    0.90 + 0.10 * i / max(total, 1),
+                    f"Analizando eventos ({i + 1}/{total}): {det.name}…",
+                )
             try:
                 events.extend(det.detect(frames, model))
             except Exception as exc:  # un detector roto no hunde el scan
@@ -182,6 +209,8 @@ class Scanner:
                         metadata={"error": str(exc)},
                     )
                 )
+        if on_progress:
+            on_progress(1.0, "Análisis completado")
         # filtrar eventos marcados como error interno
         model.events = [e for e in events if e.importance > 0.0]
         model.events.sort(key=lambda e: e.start_s)

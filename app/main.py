@@ -95,6 +95,7 @@ class MainWindow(QMainWindow):
         self.welcome.new_project.connect(self.go_connect)
         self.connect_screen.connect_requested.connect(self._connect)
         self.connect_screen.scan_requested.connect(self._scan)
+        self.connect_screen.scan_cancelled.connect(self._cancel_scan)
         self.connect_screen.back_requested.connect(self.go_welcome)
         self.director_screen.plan_requested.connect(self._plan)
         self.director_screen.back_requested.connect(self.go_connect)
@@ -151,17 +152,29 @@ class MainWindow(QMainWindow):
         if self.state.connect_sim():
             self.go_director()
 
-    def _scan(self, replay_path: Path | None) -> None:
+    def _scan(self, replay_path: Path | None, speed: int) -> None:
         self.connect_screen.set_scanning(True)
+        scan_cfg = self.state.config.scan.model_copy(update={"speed": speed})
         worker = ScanWorker(
-            self.state.controller, self.state.config.scan,
+            self.state.controller, scan_cfg,
             self.state.session_info, replay_path,
             _project_dir(self.state) / "analysis",
         )
         self._start_worker(worker)
         worker.progress.connect(self.connect_screen.set_progress)
         worker.done.connect(self._scan_done)
+        worker.cancelled.connect(self._scan_cancelled)
         worker.failed.connect(self._worker_failed)
+
+    def _cancel_scan(self) -> None:
+        if isinstance(self._worker, ScanWorker):
+            self._worker.cancel()
+            self.statusBar().showMessage("Deteniendo escaneo…")
+
+    def _scan_cancelled(self) -> None:
+        self.connect_screen.set_scanning(False)
+        self.connect_screen.set_scan_cancelled()
+        self.statusBar().showMessage("Escaneo cancelado")
 
     def _scan_done(self, model, frames) -> None:
         self.connect_screen.set_scanning(False)

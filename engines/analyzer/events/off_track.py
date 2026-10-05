@@ -6,9 +6,9 @@ from core.models import Event, EventType, SessionModel
 from engines.analyzer.events.base import EventDetector
 from engines.analyzer.events.util import (
     BASE_IMPORTANCE,
-    LOC_OFF_TRACK,
     LOC_ON_TRACK,
     clamp01,
+    is_real_off_track,
     mean_dt,
 )
 from engines.analyzer.frames import Frame
@@ -26,7 +26,7 @@ class OffTrackDetector(EventDetector):
         active: dict[int, float] = {}
         for f in frames:
             for car, s in f.cars.items():
-                if s.track_loc == LOC_OFF_TRACK:
+                if is_real_off_track(s):
                     if car not in active:
                         active[car] = f.t_s
                 elif s.track_loc == LOC_ON_TRACK:

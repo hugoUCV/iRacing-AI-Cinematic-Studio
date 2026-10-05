@@ -25,6 +25,23 @@ LOC_NOT_IN_WORLD = -1
 LOC_OFF_TRACK = 0
 LOC_ON_TRACK = 3
 
+# TrkSurf (verificado en pyirsdk irsdk.py L85-114): materiales que indican
+# una salida REAL de pista. Los pianos (rumble 11-14), pintura (9-10) y
+# asfalto/hormigón (1-6) son "off_track" en TrkLoc pero no son una salida:
+# pasar por un piano o la zona verde no es un incidente.
+REAL_OFF_SURFACES = frozenset({
+    15, 16, 17, 18,  # grass_1..4
+    19, 20, 21, 22,  # dirt_1..4
+    23,              # sand
+    24, 25,          # gravel_1..2
+    26,              # grasscrete
+})
+
+
+def is_real_off_track(sample) -> bool:
+    """¿Salida de pista real (hierba/grava/tierra/arena), no piano ni pintura?"""
+    return sample.track_loc == LOC_OFF_TRACK and sample.surface in REAL_OFF_SURFACES
+
 
 def mean_dt(frames: list[Frame]) -> float:
     """Separación media entre frames (s)."""
@@ -51,4 +68,6 @@ __all__ = [
     "on_track",
     "clamp01",
     "speed_at",
+    "is_real_off_track",
+    "REAL_OFF_SURFACES",
 ]

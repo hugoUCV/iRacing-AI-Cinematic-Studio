@@ -1,12 +1,15 @@
 """Tests del Scanner con el fake que avanza el tiempo de replay."""
 from __future__ import annotations
 
+import threading
 import time
 from pathlib import Path
 
+import pytest
+
 from core.models import SessionModel
 
-from engines.analyzer.scanner import Scanner, replay_fingerprint
+from engines.analyzer.scanner import ScanCancelled, Scanner, replay_fingerprint
 from engines.replay.sdk_controller import SDKController
 from tests.fakes import ScanFakeIR
 from utils.config import ScanConfig
@@ -81,3 +84,15 @@ def test_scan_stops_at_max_duration_guardrail():
     info = ctrl.session_info()
     model, frames = scanner.scan(info, replay_path=None)
     assert frames and frames[-1].t_s < 3.0
+
+
+def test_scan_can_be_cancelled():
+    scanner, _, ctrl = make_scanner(duration_s=60.0)
+    info = ctrl.session_info()
+    cancel = threading.Event()
+    cancel.set()  # ya cancelado antes de empezar
+
+    with pytest.raises(ScanCancelled):
+        scanner.scan(info, replay_path=None, cancel=cancel)
+    # el scan pausa la replay aunque se cancele
+    assert ctrl.verify()["play_speed"] == 0

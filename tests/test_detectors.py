@@ -37,7 +37,7 @@ def test_off_track_detection():
     frames = scenario(
         [
             (3.0, {0: {"position": 1, "dist_rate": 0.01}}),
-            (1.0, {0: {"track_loc": 0, "dist_rate": 0.002}}),  # salida
+            (1.0, {0: {"track_loc": 0, "surface": 15, "dist_rate": 0.002}}),  # hierba
             (3.0, {0: {"track_loc": 3, "dist_rate": 0.01}}),
         ]
     )
@@ -56,12 +56,36 @@ def test_no_off_track_when_clean():
     assert OffTrackDetector().detect(frames, model()) == []
 
 
+def test_curb_is_not_a_real_off_track():
+    """Pasar por un piano (rumble 11) con TrkLoc off_track NO es salida."""
+    frames = scenario(
+        [
+            (3.0, {0: {"dist_rate": 0.01}}),
+            (1.0, {0: {"track_loc": 0, "surface": 11, "dist_rate": 0.008}}),  # piano
+            (3.0, {0: {"track_loc": 3, "dist_rate": 0.01}}),
+        ]
+    )
+    assert OffTrackDetector().detect(frames, model()) == []
+    assert SpinDetector().detect(frames, model()) == []
+
+
+def test_is_real_off_track_helper():
+    from engines.analyzer.events.util import is_real_off_track
+    from engines.analyzer.frames import CarSample
+
+    assert is_real_off_track(CarSample(track_loc=0, surface=15)) is True  # hierba
+    assert is_real_off_track(CarSample(track_loc=0, surface=24)) is True  # grava
+    assert is_real_off_track(CarSample(track_loc=0, surface=11)) is False  # piano
+    assert is_real_off_track(CarSample(track_loc=0, surface=1)) is False  # asfalto
+    assert is_real_off_track(CarSample(track_loc=3, surface=15)) is False  # en pista
+
+
 def test_spin_detection():
-    # coche rápido → sale de pista y casi se detiene (trompo)
+    # coche rápido → sale de pista (hierba) y casi se detiene (trompo)
     frames = scenario(
         [
             (4.0, {0: {"position": 1, "dist_rate": 0.02}}),  # ≈ 140 m/s
-            (2.5, {0: {"track_loc": 0, "dist_rate": 0.0002}}),  # ≈ 1.4 m/s
+            (2.5, {0: {"track_loc": 0, "surface": 15, "dist_rate": 0.0002}}),  # ≈ 1.4 m/s
             (2.0, {0: {"track_loc": 3, "dist_rate": 0.02}}),
         ]
     )
@@ -135,7 +159,7 @@ def test_registry_runs_all_detectors():
     frames = scenario(
         [
             (5.0, {0: {"position": 2, "dist_rate": 0.012}, 1: {"position": 1, "dist_rate": 0.011}}),
-            (1.0, {0: {"track_loc": 0, "dist_rate": 0.0002}, 1: {"dist_rate": 0.011}}),
+            (1.0, {0: {"track_loc": 0, "surface": 15, "dist_rate": 0.0002}, 1: {"dist_rate": 0.011}}),
             (5.0, {0: {"track_loc": 3, "position": 1, "dist_rate": 0.012}, 1: {"position": 2, "dist_rate": 0.011}}),
         ]
     )
