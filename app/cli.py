@@ -16,17 +16,15 @@ import json
 import sys
 from pathlib import Path
 
+from ai.provider import provider_from_config
 from core.models import (
     Clip,
-    ProjectConfig,
     RenderJob,
     SessionModel,
     ShotPlan,
     StylePreset,
     Timeline,
 )
-
-from ai.provider import provider_from_config
 from engines.analyzer.scanner import Scanner
 from engines.camera.catalog import CameraCatalog
 from engines.director.ai_director import AIDirector
@@ -36,6 +34,7 @@ from engines.video.export import export_timeline
 from services.capture.native import CaptureError, NativeCapture
 from services.capture.offline import OfflineCapture
 from services.capture.runner import CaptureRunner
+from services.capture.ui import UIPilot
 from utils.config import AppConfig, load_config
 
 
@@ -166,7 +165,9 @@ def cmd_capture(args) -> int:
         else NativeCapture(ctrl, cfg.capture.videos_dir)
     )
     session_num = ctrl.session_info().session_num
-    runner = CaptureRunner(ctrl, backend, captures_dir, session_num=session_num)
+    ui_pilot = None if args.offline else UIPilot()
+    runner = CaptureRunner(ctrl, backend, captures_dir, session_num=session_num,
+                           ui_pilot=ui_pilot)
     print(f"Capturando {len(plan.shots)} planos (backend: {backend.name})...")
     try:
         result = runner.run(plan)
@@ -230,7 +231,9 @@ def cmd_generate(args) -> int:
 
     print("[3/4] Capturando planos...")
     backend = OfflineCapture() if args.offline else NativeCapture(ctrl, cfg.capture.videos_dir)
-    runner = CaptureRunner(ctrl, backend, captures_dir, session_num=info.session_num)
+    ui_pilot = None if args.offline else UIPilot()
+    runner = CaptureRunner(ctrl, backend, captures_dir, session_num=info.session_num,
+                           ui_pilot=ui_pilot)
     try:
         captures = runner.run(plan)
     except CaptureError as exc:

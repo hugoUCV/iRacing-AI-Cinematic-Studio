@@ -6,12 +6,13 @@ atrás solo ocurren entre planos, nunca dentro de una toma.
 """
 from __future__ import annotations
 
+# ruff: noqa: BLE001  — captura tolerante a fallos: cada `except Exception`
+# registra el error y continúa (degradación elegante, nunca debe crashear).
 import logging
 import time
 from pathlib import Path
 
 from core.models import ShotPlan
-
 from engines.replay.base import ReplayController
 from services.capture.base import CaptureBackend
 
@@ -29,6 +30,7 @@ class CaptureRunner:
         session_num: int,
         verify_retries: int = 2,
         wait_timeout_s: float | None = None,
+        ui_pilot=None,
     ):
         self.controller = controller
         self.backend = backend
@@ -36,6 +38,7 @@ class CaptureRunner:
         self.session_num = session_num
         self.verify_retries = verify_retries
         self.wait_timeout_s = wait_timeout_s  # None → dur*2+15 por plano
+        self.ui_pilot = ui_pilot  # None → no tocar la UI
 
     def run(self, plan: ShotPlan, on_progress=None) -> dict[str, Path]:
         """Captura todos los planos. Devuelve {shot_id: archivo} para los que
@@ -45,16 +48,28 @@ class CaptureRunner:
         self.captures_dir.mkdir(parents=True, exist_ok=True)
         result: dict[str, Path] = {}
         shots = sorted(plan.shots, key=lambda s: s.source_start_s)
-        for i, shot in enumerate(shots):
-            if on_progress:
-                on_progress(i + 1, len(shots), f"plano {shot.id} ({shot.camera.group_name})")
+        if self.ui_pilot is not None:
             try:
-                produced = self._capture_shot(shot)
-                if produced:
-                    result[shot.id] = produced
-                    log.info("capturado %s → %s", shot.id, produced)
+                self.ui_pilot.hide()
             except Exception as exc:
-                log.warning("falló la captura de %s: %s", shot.id, exc)
+                log.warning("no se pudo ocultar la UI: %s", exc)
+        try:
+            for i, shot in enumerate(shots):
+                if on_progress:
+                    on_progress(i + 1, len(shots), f"plano {shot.id} ({shot.camera.group_name})")
+                try:
+                    produced = self._capture_shot(shot)
+                    if produced:
+                        result[shot.id] = produced
+                        log.info("capturado %s → %s", shot.id, produced)
+                except Exception as exc:
+                    log.warning("falló la captura de %s: %s", shot.id, exc)
+        finally:
+            if self.ui_pilot is not None:
+                try:
+                    self.ui_pilot.restore()
+                except Exception as exc:
+                    log.warning("no se pudo restaurar la UI: %s", exc)
         return result
 
     # ── un plano ──────────────────────────────────────────────────────────

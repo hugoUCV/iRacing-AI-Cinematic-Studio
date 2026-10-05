@@ -5,7 +5,6 @@ import time
 from pathlib import Path
 
 from core.models import CameraSpec, Shot, ShotPlan, StylePreset
-
 from engines.replay.sdk_controller import SDKController
 from services.capture.offline import OfflineCapture
 from services.capture.runner import CaptureRunner
@@ -97,7 +96,7 @@ def test_runner_skips_failed_shot_and_continues(tmp_path: Path):
 
 def test_runner_verifies_camera_change():
     """Si el sim no confirma el grupo, el runner reintenta set_camera."""
-    runner, fake, backend = make_env()
+    runner, fake, _ = make_env()
 
     def no_confirm(car, group, camera):
         fake.calls.append(f"cam:{car}:{group}:{camera}")  # nunca confirma
@@ -113,9 +112,33 @@ def test_runner_verifies_camera_change():
 def test_runner_does_not_overflow_shot_time():
     """El wait_until usa timeout; con un sim lento no se cuelga."""
     t0 = time.monotonic()
-    runner, fake, backend = make_env(duration_s=3.0, backend=RecordingCapture(),
-                                     wait_timeout_s=1.0)
+    runner, fake, _ = make_env(duration_s=3.0, backend=RecordingCapture(),
+                               wait_timeout_s=1.0)
     fake.duration_s = 2.0  # la replay termina antes que el plano
     runner._capture_shot(make_plan().shots[0])
     elapsed = time.monotonic() - t0
     assert elapsed < 6, f"esperaba timeout breve, tardó {elapsed:.1f}s"
+
+
+def test_runner_hides_and_restores_ui(tmp_path: Path):
+    """El UIPilot oculta la UI antes del primer plano y la restaura al final."""
+    calls: list[str] = []
+
+    class Pilot:
+        def hide(self) -> None:
+            calls.append("hide")
+
+        def restore(self) -> None:
+            calls.append("restore")
+
+    runner, _, _ = make_env(ui_pilot=Pilot())
+    runner.captures_dir = tmp_path
+    runner.run(make_plan())
+    assert calls == ["hide", "restore"]
+
+
+def test_runner_ui_pilot_optional():
+    """Sin ui_pilot el runner funciona igual (sin tocar la UI)."""
+    runner, _, _ = make_env()  # sin ui_pilot
+    runner.captures_dir = Path("capturas")
+    assert runner.ui_pilot is None

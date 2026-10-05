@@ -10,6 +10,7 @@ from services.capture.native import (
     NativeCapture,
     video_capture_enabled,
 )
+from services.capture.ui import UIPilot
 
 
 class FakeCtrl:
@@ -70,3 +71,21 @@ def test_stop_finds_and_moves_new_file(tmp_path: Path):
     assert (out / "shot.mp4").exists()
     assert not new_file.exists()  # se movió a la carpeta del plano
     assert ctrl.calls == [1, 2]  # VC_START, VC_STOP
+
+
+def test_ui_pilot_hide_and_restore():
+    """El UIPilot busca la ventana una vez y envía la tecla en hide/restore."""
+    calls: list[str] = []
+
+    def finder() -> int:
+        calls.append("find")
+        return 12345
+
+    def sender(hwnd: int) -> bool:
+        calls.append(f"send:{hwnd}")
+        return True
+
+    pilot = UIPilot(finder=finder, sender=sender)
+    assert pilot.hide() is True
+    assert pilot.restore() is True
+    assert calls == ["find", "send:12345", "send:12345"]

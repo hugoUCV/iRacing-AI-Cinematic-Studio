@@ -6,7 +6,6 @@ import os
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QApplication,
     QHBoxLayout,
@@ -33,6 +32,7 @@ from app.workers import (
     ScanWorker,
     make_capture_backend,
 )
+from services.capture.ui import UIPilot
 
 STEPS = ["Conectar", "Director", "Editar", "Render"]
 
@@ -199,10 +199,13 @@ class MainWindow(QMainWindow):
     def _capture(self, offline: bool) -> None:
         self.export_screen.set_capturing(True)
         backend = make_capture_backend(self.state.controller, offline)
+        # ocultar la UI de iRacing durante la captura (no en dry-run)
+        ui_pilot = None if offline else UIPilot()
         worker = CaptureWorker(
             self.state.controller, backend,
             _project_dir(self.state) / "captures",
             self.state.session_info.session_num, self.state.plan,
+            ui_pilot=ui_pilot,
         )
         self._start_worker(worker)
         worker.progress.connect(self.export_screen.set_capture_progress)

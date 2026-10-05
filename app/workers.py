@@ -1,13 +1,14 @@
 """Workers de la GUI: scan, plan, captura y export en QThread."""
 from __future__ import annotations
 
+# ruff: noqa: BLE001  — los workers capturan cualquier excepción para emitirla
+# como señal failed; si no, el error se perdería dentro del QThread.
 import threading
 from pathlib import Path
 
 from PySide6.QtCore import QThread, Signal
 
 from core.models import RenderJob, SessionInfo, StylePreset
-
 from engines.analyzer.scanner import ScanCancelled, Scanner
 from engines.video.export import export_timeline
 from services.capture.native import NativeCapture
@@ -94,19 +95,21 @@ class CaptureWorker(QThread):
     failed = Signal(str)
 
     def __init__(self, controller, backend, captures_dir: Path,
-                 session_num: int, plan, parent=None):
+                 session_num: int, plan, ui_pilot=None, parent=None):
         super().__init__(parent)
         self.controller = controller
         self.backend = backend
         self.captures_dir = captures_dir
         self.session_num = session_num
         self.plan = plan
+        self.ui_pilot = ui_pilot
 
     def run(self) -> None:
         try:
             runner = CaptureRunner(
                 self.controller, self.backend, self.captures_dir,
                 session_num=self.session_num, wait_timeout_s=None,
+                ui_pilot=self.ui_pilot,
             )
             result = runner.run(self.plan, on_progress=self._p)
         except Exception as exc:
